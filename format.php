@@ -89,7 +89,7 @@ class qformat_mapleta extends qformat_default {
 */
 
 //        foreach ($qarray as $mapletaquestion) {
-        $mapletaquestion = $qarray[22];
+        $mapletaquestion = $qarray[23];
             $mode = trim((string) $mapletaquestion->mode);
             $algo = trim((string) $mapletaquestion->algorithm);
             $type = 'stack';

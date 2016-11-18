@@ -1,4 +1,4 @@
-# STACK 2.0 question importer
+# MapleTA question importer
 
 __This is a feature stub, with only minimal functionality.__
 
