@@ -82,48 +82,10 @@ class qformat_mapleta extends qformat_default {
 /*
         $types = array();
         foreach ($qarray as $mapletaquestion) {
-        	$mode = trim((string) $mapletaquestion->mode);
-        	$types[] = $mode;
+            $mode = trim((string) $mapletaquestion->mode);
+            $types[] = $mode;
         }
         print_r($types);
-Array
-(
-    [0] => Non Permuting Multiple Choice
-    [1] => Multiple Selection
-    [2] => Non Permuting Multiple Choice
-    [3] => Non Permuting Multiple Choice
-    [4] => Essay
-    [5] => Non Permuting Multiple Choice
-    [6] => Non Permuting Multiple Choice
-    [7] => Multiple Choice
-    [8] => Non Permuting Multiple Choice
-    [9] => Non Permuting Multiple Choice
-    [10] => Non Permuting Multiple Choice
-    [11] => Non Permuting Multiple Choice
-    [12] => Multiple Choice
-    [13] => Essay
-    [14] => Non Permuting Multiple Choice
-    [15] => Non Permuting Multiple Selection
-    [16] => Maple
-    [17] => Numeric
-    [18] => Multiple Choice
-    [19] => Multiple Choice
-    [20] => Multiple Selection
-    [21] => Multiple Choice
-    [22] => Maple
-    [23] => Maple
-    [24] => Non Permuting Multiple Choice
-    [25] => Non Permuting Multiple Choice
-    [26] => Non Permuting Multiple Selection
-    [27] => Multiple Choice
-    [28] => Non Permuting Multiple Choice
-    [29] => Multiple Choice
-    [30] => Non Permuting Multiple Selection
-    [31] => Non Permuting Multiple Choice
-    [32] => Non Permuting Multiple Choice
-    [33] => Non Permuting Multiple Choice
-    [34] => Non Permuting Multiple Choice
-)
 */
 
 //        foreach ($qarray as $mapletaquestion) {
@@ -183,9 +145,8 @@ Array
             $question->single = false;
         }
 
-        $correctanswer = (string) $assessmentitem->answer;
-        $correctanswer = explode(',', $correctanswer);
         // Assume all correct answers are equally weighted.
+        $correctanswer = $this->correct_answers($assessmentitem);
         $fraction = 1/count($correctanswer);
         if (count($correctanswer) == 3) {
             $fraction = 0.33;
@@ -225,19 +186,16 @@ Array
         $errors = array();
         $question = new stdClass();
         $question->qtype                 = 'stack';
-        $question->name                  = (string) $assessmentitem->name;
+        // The "RAW IMPORT" here is only to make them easy to find in the question bank.  Please do delete it if you prefer.
+        $question->name                  = 'RAW IMPORT: '. (string) $assessmentitem->name;
 
         $question->variantsselectionseed = '';
         $question->defaultmark           = 1;
         $question->length                = 1;
 
         $question->questiontext          = (string) $assessmentitem->text;
-        // Add in blank stubs for an input.
-        $question->questiontext         .= ' [[input:ans1]] [[validation:ans1]]';
         $question->questiontextformat    = FORMAT_HTML;
-        // Always blank on import - we assume PRT feedback is embedded in the question.
-        $question->specificfeedback      = array('text' => '', 'format' => FORMAT_HTML, 'files' => array());
-        $question->generalfeedback       = '[[feedback:prt1]]';
+        $question->generalfeedback       = '';
         $question->generalfeedbackformat = FORMAT_HTML;
 
         $algorithm = trim((string) $assessmentitem->algorithm);
@@ -262,6 +220,102 @@ Array
         $question->prtincorrect          = array('text' => get_string('defaultprtincorrectfeedback', 'qtype_stack'),
                                                                 'format' => FORMAT_HTML, 'files' => array());
 
+        $correctanswers = $this->correct_answers($assessmentitem);
+
+        // Create non-trivial inputs.
+        $inputs = array('ans1');
+        foreach ($inputs as $ip) {
+            // This is an odd format, but the "formfrom" fields have to look like $question->ans1type.
+            // The foreach above will make it easier to have more than one input if anyone needs it.
+            $question->{$ip.'type'}               = 'algebraic';
+            $question->{$ip.'modelans'}           = $correctanswers[0];
+            $question->{$ip.'boxsize'}            = 15;
+            $question->{$ip.'strictsyntax'}       = false;
+            $question->{$ip.'insertstars'}        = 0;
+            $question->{$ip.'syntaxhint'}         = '';
+            $question->{$ip.'syntaxattribute'}    = 0;
+            $question->{$ip.'forbidwords'}        = '';
+            $question->{$ip.'allowwords'}         = '';
+            $question->{$ip.'forbidfloat'}        = true;
+            $question->{$ip.'requirelowestterms'} = true;
+            $question->{$ip.'checkanswertype'}    = true;
+            $question->{$ip.'mustverify'}         = true;
+            $question->{$ip.'showvalidation'}     = 1;
+            $question->{$ip.'options'}            = '';
+
+            // Add in blank stubs for an input at the end of the question variables.
+            $question->questiontext         .= "\n [[input:{$ip}]] [[validation:{$ip}]]";
+        }
+
+        // Create non-trivial potential response tree, just as with inputs we loop now to save time later.
+        $specificfeedbackprt = '';
+        $prts = array('prt1');
+        $potentialresponsetrees = array();
+        foreach ($prts as $name) {
+            $prt = array();
+            $pr = array();
+            $prt['value']             = 1;
+            $prt['autosimplify']      = true;
+            $prt['feedbackvariables'] = '';
+            // We need arrays of these things, one entry for each node.
+            $prt['answertest']        = array();
+            $prt['sans']              = array();
+            $prt['tans']              = array();
+            $prt['testoptions']       = array();
+            $prt['quiet']             = array();
+            $prt['truescore']         = array();
+            $prt['falsescore']        = array();
+            $prt['truepenalty']       = array();
+            $prt['falsepenalty']      = array();
+            $prt['truescoremode']     = array();
+            $prt['falsescoremode']    = array();
+            $prt['truenextnode']      = array();
+            $prt['falsenextnode']     = array();
+            $prt['truefeedback']      = array();
+            $prt['falsefeedback']     = array();
+
+            // Now loop over the nodes.
+            $prtnodes = array('0');
+            foreach ($prtnodes as $node) {
+                $prt['answertest'][$node]  = 'AlgEquiv';
+                // Hard wire these values.
+                $prt['sans'][$node]            = $inputs[0];
+                $prt['tans'][$node]            = $correctanswers[0];;
+                $prt['testoptions'][$node]     = '';
+                $prt['quiet'][$node]           = false;
+                $prt['truescore'][$node]       = 1;
+                $prt['falsescore'][$node]      = 0;
+                $prt['truepenalty'][$node]     = 0;
+                $prt['falsepenalty'][$node]    = 0.1;
+                $prt['truescoremode'][$node]   = '=';
+                $prt['falsescoremode'][$node]  = '=';
+                $prt['truenextnode'][$node]    = -1;
+                $prt['falsenextnode'][$node]   = -1;
+                $prt['truefeedback'][$node]    = array('text' => '', 'format' => FORMAT_HTML, 'files' => array());
+                $prt['falsefeedback'][$node]   = array('text' => '', 'format' => FORMAT_HTML, 'files' => array());
+                $basicnote = $name.'-'.$node.'-';
+                $prt['trueanswernote'][$node]  = $basicnote.'T';
+                $prt['falseanswernote'][$node] = $basicnote.'T';
+            }
+
+            $potentialresponsetrees[$name] = $prt;
+            // Link the PRT into the question.
+            $specificfeedbackprt .= "[[feedback:{$name}]]";
+        }
+
+        // Note, we might want to add in the PRTs in the question next, not in the specific feedback....
+        $question->specificfeedback = array('text' => $specificfeedbackprt, 'format' => FORMAT_HTML, 'files' => array());
+
+        // Build the formfrom data.
+        foreach ($potentialresponsetrees as $name => $prt) {
+            foreach ($prt as $key => $val) {
+                $question->{$name . $key} = $val;
+            }
+        }
+
+        //echo "<pre>";
+        //print_r($question);
+        //echo "</pre>";
         return array($question, $errors);
     }
 
@@ -286,9 +340,23 @@ Array
         $ret = "/* Automatically converted from the following Maple code: */\n";
         $ret .= "/* ' . $strin . '*/\n\n";
         $ret .= implode(";\n", $maxima);
-        print_r($ret);
 
+        //print_r($ret);
         //echo "</pre>";
-        //return $ret;
+        return $ret;
+    }
+
+    /**
+     * Process a the incoming correct answers into an array.
+     * @param SimpleXMLElement $assessmentitem
+     * @return the question as an array
+     */
+    private function correct_answers($assessmentitem) {
+
+        $correctanswer = (string) $assessmentitem->answer;
+        $correctanswer = explode(',', $correctanswer);
+
+        return $correctanswer;
+
     }
 }
