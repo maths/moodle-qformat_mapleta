@@ -78,24 +78,24 @@ class qformat_mapleta extends qformat_default {
         $qarray = $questions->question;
 
         $result = array();
+        $report = array();
         $errors = array();
-/*
-        $types = array();
+
         foreach ($qarray as $mapletaquestion) {
             $mode = trim((string) $mapletaquestion->mode);
-            $types[] = $mode;
-        }
-        print_r($types);
-*/
-
-//        foreach ($qarray as $mapletaquestion) {
-        $mapletaquestion = $qarray[23];
-            $mode = trim((string) $mapletaquestion->mode);
             $algo = trim((string) $mapletaquestion->algorithm);
-            $type = 'stack';
+            $mcq = false;
+            $type = '';
+            $imported = false;
+            $err = array();
+
             if ($mode == 'Non Permuting Multiple Choice' || $mode == 'Multiple Selection'
                     || $mode == 'Multiple Choice') {
+               $mcq = true;
                $type = 'mcq';
+            }
+            if ($mode == 'maple') {
+                $type = 'stack';
             }
             if ($algo != '') {
                $type = 'stack';
@@ -103,13 +103,21 @@ class qformat_mapleta extends qformat_default {
 
             if ($type == 'mcq') {
                 list($question, $err) = $this->questiontomcqformfrom($mapletaquestion);
-            } else {
-                list($question, $err) = $this->questiontostackformfrom($mapletaquestion);
+                $imported = true;
+            } else if ($type == 'stack'){
+                list($question, $err) = $this->questiontostackformfrom($mapletaquestion, $mcq);
+                $imported = true;
             }
-
+            $report[] = array('name' => trim((string) $mapletaquestion->name),
+                              'type' => trim((string) $mapletaquestion->mode),
+                              'converted' => $imported);
             $result[] = $question;
             $errors = array_merge($errors, $err);
-//        }
+        }
+
+        echo "<pre>";
+        print_r($report);
+        echo "</pre>";
 
         if (!empty($errors)) {
             throw new stack_exception(implode('<br />', $errors));
@@ -148,9 +156,6 @@ class qformat_mapleta extends qformat_default {
         // Assume all correct answers are equally weighted.
         $correctanswer = $this->correct_answers($assessmentitem);
         $fraction = 1/count($correctanswer);
-        if (count($correctanswer) == 3) {
-            $fraction = 0.33;
-        }
         $correctanswers = array();
         foreach ($correctanswer as $c) {
             $s = ((int) $c) - 1;
@@ -181,7 +186,7 @@ class qformat_mapleta extends qformat_default {
      * @param SimpleXMLElement $assessmentitem
      * @return the question as an array
      */
-    protected function questiontostackformfrom($assessmentitem) {
+    protected function questiontostackformfrom($assessmentitem, $mcq) {
 
         $errors = array();
         $question = new stdClass();
@@ -221,14 +226,36 @@ class qformat_mapleta extends qformat_default {
                                                                 'format' => FORMAT_HTML, 'files' => array());
 
         $correctanswers = $this->correct_answers($assessmentitem);
-
         // Create non-trivial inputs.
         $inputs = array('ans1');
-        foreach ($inputs as $ip) {
+        $types = array('algebraic');
+        $teacheranswer = array($correctanswers[0]);
+
+        // Create randomly generated MCQ.
+        if ($mcq) {
+            $teacheranswer[0] = 'ta';
+            $qch = $assessmentitem->choices->choice;
+            $types[0] = 'radio';
+            if (count($qch > 1)) {
+                $types[0] = 'checkbox';
+            }
+            $stackmcq = array();
+            for ($x = 0; $x < count($assessmentitem->choices->choice); $x++) {
+                $response = 'false';
+                if (array_key_exists($x, $correctanswers)) {
+                    $response = 'true';
+                }
+                $stackmcq[] = '["' . trim((string) $qch->$x) . '", ' . $response .']';
+            }
+            $qv = 'ta:[' . implode(', ', $stackmcq) . "]\n";
+            $qv .= "ta:random_permutation(ta);\n";
+        }
+
+        foreach ($inputs as $key => $ip) {
             // This is an odd format, but the "formfrom" fields have to look like $question->ans1type.
             // The foreach above will make it easier to have more than one input if anyone needs it.
-            $question->{$ip.'type'}               = 'algebraic';
-            $question->{$ip.'modelans'}           = $correctanswers[0];
+            $question->{$ip.'type'}               = $types[$key];
+            $question->{$ip.'modelans'}           = $teacheranswer[$key];
             $question->{$ip.'boxsize'}            = 15;
             $question->{$ip.'strictsyntax'}       = false;
             $question->{$ip.'insertstars'}        = 0;
@@ -295,7 +322,7 @@ class qformat_mapleta extends qformat_default {
                 $prt['falsefeedback'][$node]   = array('text' => '', 'format' => FORMAT_HTML, 'files' => array());
                 $basicnote = $name.'-'.$node.'-';
                 $prt['trueanswernote'][$node]  = $basicnote.'T';
-                $prt['falseanswernote'][$node] = $basicnote.'T';
+                $prt['falseanswernote'][$node] = $basicnote.'F';
             }
 
             $potentialresponsetrees[$name] = $prt;
