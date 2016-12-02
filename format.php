@@ -198,7 +198,7 @@ class qformat_mapleta extends qformat_default {
         $question->defaultmark           = 1;
         $question->length                = 1;
 
-        $question->questiontext          = (string) $assessmentitem->text;
+        $question->questiontext          = $this->mapletext_to_castext((string) $assessmentitem->text);
         $question->questiontextformat    = FORMAT_HTML;
         $question->generalfeedback       = '';
         $question->generalfeedbackformat = FORMAT_HTML;
@@ -249,7 +249,9 @@ class qformat_mapleta extends qformat_default {
             }
             $qv = 'ta:[' . implode(', ', $stackmcq) . "]\n";
             $qv .= "ta:random_permutation(ta);\n";
+            $question->questionvariables .= $qv;
         }
+
 
         foreach ($inputs as $key => $ip) {
             // This is an odd format, but the "formfrom" fields have to look like $question->ans1type.
@@ -346,6 +348,18 @@ class qformat_mapleta extends qformat_default {
         return array($question, $errors);
     }
 
+    /* This function does basic (tedious) changes to Maple text to castext.
+     */
+    private function mapletext_to_castext($strin) {
+        /* This matches  $a  type patterns. */
+        preg_match_all('/\$[a-zA-Z]+/', $strin, $out);
+        foreach ($out[0] as $pat) {
+            $rep = '@' . substr($pat, 1) . '@';
+            $strin = str_replace($pat, $rep, $strin);
+        }
+        return $strin;
+    }
+
     /* This function does basic (tedious) changes to Maple text to transform it into something
      * which Maxima might digest.  Could be extended forever...
      */
@@ -355,7 +369,7 @@ class qformat_mapleta extends qformat_default {
 
         // Very very lazy way of getting rid of maple("...");
         $ex = str_replace('maple("', '', $strin);
-        $ex = str_replace('");', '', $ex);
+        $ex = str_replace('");', ';', $ex);
         $rawmaxima = explode(';', $ex);
         $maxima = array();
         foreach ($rawmaxima as $ex) {
