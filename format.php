@@ -213,6 +213,7 @@ class qformat_mapleta extends qformat_default {
         $question->questionsimplify      = (bool) $stackconfig->questionsimplify;
         $question->penalty               = 0.1;
         $question->assumepositive        = (bool) $stackconfig->assumepositive;
+        $question->assumereal            = (bool) $stackconfig->assumereal;
         $question->multiplicationsign    = $stackconfig->multiplicationsign;
         $question->sqrtsign              = (bool) $stackconfig->sqrtsign;
         $question->complexno             = $stackconfig->complexno;
@@ -357,6 +358,11 @@ class qformat_mapleta extends qformat_default {
             $rep = '@' . substr($pat, 1) . '@';
             $strin = str_replace($pat, $rep, $strin);
         }
+        preg_match_all('/\$\{([a-zA-Z0-9]+)\}/', $strin, $out);
+        foreach ($out[0] as $pat) {
+            $rep = '@' . substr($pat, 2, -1) . '@';
+            $strin = str_replace($pat, $rep, $strin);
+        }
         return $strin;
     }
 
@@ -373,7 +379,10 @@ class qformat_mapleta extends qformat_default {
         $rawmaxima = explode(';', $ex);
         $maxima = array();
         foreach ($rawmaxima as $ex) {
+            $ex = str_replace('range(', 'rand_range(', $ex);
+            $ex = preg_replace('/rand\((\w+)\.\.(\w+)\)\(\)/', 'rand_range(\1, \2)', $ex);
             $ex = str_replace('$', '', $ex);
+            $ex = str_replace(':=', ':', $ex);
             $ex = str_replace('=', ':', $ex);
             $maxima[] = $ex;
         }
