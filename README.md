@@ -9,7 +9,7 @@ This Moodle question import format can import questions exported from a MapleTA 
 It was created by Chris Sangwin.
 
 To install, either [download the zip file](https://github.com/maths/moodle-qformat_mapleta/zipball/master),
-unzip it, and place it in the directory `moodle\question\behaviour\mapleta`.
+unzip it, and place it in the directory `moodle\question\format\mapleta`.
 (You will need to rename the directory `moodle-qformat_mapleta -> mapleta`.)
 Alternatively, get the code using git by running the following command in the
 top level folder of your Moodle install:
