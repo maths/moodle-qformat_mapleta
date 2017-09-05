@@ -1,0 +1,100 @@
+# Script to replace MathML with LaTeX
+saxonpath="/var/www/html/george01/question/format/mapleta/SaxonHE"
+mml2texpath="/var/www/html/george01/question/format/mapleta/mml2tex"
+
+# Create copy of the original file with _tex appended to the file name
+file="$1"
+#if [[ $file =~ '/.*\.zip/' ]]; then zipped=true; fi
+#echo $zipped
+
+if [ ${file: -4} == ".zip" ]; then
+  echo "Unzipping...";
+  newfile=$(sed 's/\.zip/\.xml/g' <<< $file)
+  unzip $file -d tmp
+  file=$newfile
+  mv "tmp/manifest.xml" $newfile
+fi
+
+prefile=$(sed 's/\.xml/_tidied\.xml/g' <<< $file) 
+outputfile=$(sed 's/\.xml/_tex\.xml/g' <<< $file) 
+echo "Output will be saved in $outputfile"
+cp /dev/null $outputfile
+
+#
+# Process the original Maple TA XML file to prepare it for mml2tex
+#
+
+# Add entity declarations:
+cat xmlentities.txt $file >> $outputfile
+
+# Remove CDATA tags
+sed -i "s/<text><\!\[CDATA\[/<text>/g" $outputfile
+sed -i "s/\]\]><\/text>/<\/text>/g" $outputfile
+sed -i "s/<comment><\!\[CDATA\[/<comment>/g" $outputfile
+sed -i "s/\]\]><\/comment>/<\/comment>/g" $outputfile
+sed -i "s/<choice><\!\[CDATA\[/<choice>/g" $outputfile
+sed -i "s/\]\]><\/choice>/<\/choice>/g" $outputfile
+
+# Rewrite <N> as <optN></optN>, N=1..10 (these are fill-in-the-blanks placeholders)
+for i in `seq 1 10`;
+do
+sedarg="s/<$i>/<opt$i><\/opt$i>/g"
+#echo $sedarg
+	sed -i $sedarg $outputfile
+done  
+
+# Tidy up <br> tags to make them XML compliant
+#first make any properly formatted <br/> tags into bad ones, and get rid of any </br>'s so we don't double-fix them
+sed -i "s/<br\(.*\)\/>/<br \1 >/g" $outputfile
+sed -i "s/<\/br>//g" $outputfile
+#now fix all <br*> tags by making them <br*/>
+sed -i "s/<br\([^<]*\)>/<br \1 \/>/g" $outputfile
+
+# Also fix <hr> and <img> tags
+sed -i "s/<hr\([^<]*\)>/<hr\/>/g" $outputfile
+sed -i "s/<img\([^<]*\)>/<img \1 \/>/g" $outputfile
+
+# remove bad MathML
+sed -i "s/<mspace class=\"nbsp\"><\/mspace>//g" $outputfile
+
+#remove <pre> and <script> tags which break some questions
+sed -i "s/<pre>//g" $outputfile
+sed -i "s/<\/pre>//g" $outputfile
+sed -i "s/<script>//g" $outputfile
+sed -i "s/<\/script>//g" $outputfile
+
+
+cp $outputfile $prefile
+mv $prefile tmp
+
+#
+# Use saxon to run mml2tex on the new file
+#
+echo "Replacing MathML with LaTeX..."
+args="$saxonpath/saxon9he.jar -s:$outputfile -xsl:$mml2texpath/xsl/invoke-mml2tex.xsl -o:$outputfile"
+java -jar $args
+
+#
+# Tidy up the mml2tex output
+#
+
+# Restore CDATA tags
+sed -i "s/<text> /<text><\!\[CDATA\[ /g" $outputfile
+sed -i "s/ <\/text>/ \]\]><\/text>/g" $outputfile
+sed -i "s/<comment> /<comment><\!\[CDATA\[ /g" $outputfile
+sed -i "s/ <\/comment>/ \]\]><\/comment>/g" $outputfile
+sed -i "s/<choice> /<choice><\!\[CDATA\[ /g" $outputfile
+sed -i "s/ <\/choice>/ \]\]><\/choice>/g" $outputfile
+sed -i "s/<algorithm> /<algorithm><\!\[CDATA\[ /g" $outputfile
+sed -i "s/ <\/algorithm>/ \]\]><\/algorithm>/g" $outputfile
+
+cp $outputfile testing/geoseqser_prefinal.xml
+
+# Restore <N> in place of <optN/>
+for i in `seq 1 10`;
+do
+sedarg="s/<opt$i\/>/<$i>/g"
+	sed -i $sedarg $outputfile
+done 
+echo "Complete."
+echo ""
